@@ -211,7 +211,7 @@ def create_word_export(topic, syllabus, text):
 # --- 4. GUI ---
 st.set_page_config(page_title="Advanced Lesson Planner", layout="wide")
 
-st.title("🎓 PTES Universal Lesson Planner (With PEDATI Flow Grid)")
+st.title("🎓 PTES Universal & PEDATI Lesson Planner")
 st.info("Type in the lesson topic, the subject's syllabus code and the extra information like canva, youtube, infographic")
 
 c1, c2 = st.columns(2)
