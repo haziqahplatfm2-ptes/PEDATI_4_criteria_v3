@@ -2,6 +2,9 @@ import streamlit as st
 import google.generativeai as genai
 from docx import Document
 from docx.shared import Pt, Inches
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from io import BytesIO
 
 # --- 1. CONFIGURATION ---
@@ -26,58 +29,65 @@ def generate_advanced_plan(topic, syllabus, extra_context):
     Topic: {topic}. Syllabus Code: {syllabus}. Context: {extra_context}.
     Generate a professional lesson plan in English.
     
+    CRITICAL RULES FOR CONTENT FORMATTING:
+    1. DO NOT use double asterisks (**) anywhere in your response.
+    2. DO NOT use bullet points (e.g., -, *, •) under any circumstances. If a section requires multiple items or a list, you MUST use numbers (1, 2, 3...) exclusively.
+    3. All heading markers below must remain in absolute CAPITAL LETTERS.
+
     Use the following EXACT markers for the document structure:
     
     SECTION: TOPIC
     {topic}
     
     SECTION: LESSON OBJECTIVES
-    [4 points]
+    [Provide exactly 4 numbered points using 1., 2., 3., 4.]
     
     SECTION: LESSON OUTCOMES
-    [4 points]
+    [Provide exactly 4 numbered points using 1., 2., 3., 4.]
     
     SECTION: SUCCESS CRITERIA
-    [4 points]
+    [Provide exactly 4 numbered points using 1., 2., 3., 4.]
     
     SECTION: PREREQUISITE
-    [1 point]
+    [Provide 1 statement]
     
     SECTION: KEYWORDS
-    [6 items]
+    [Provide 6 items separated by commas only. Do not make a list.]
     
     SECTION: HOTS
-    [4 main domains from Bloom's Taxonomy]
+    1. Analyzing: [Add direct context aligned to the topic]
+    2. Evaluating: [Add direct context aligned to the topic]
+    3. Creating: [Add direct context aligned to the topic]
+    4. Applying: [Add direct context aligned to the topic]
     
     SECTION: DIGITAL CITIZENSHIP
-    [4 points on ethical tech use/Chromebooks/Canva/YouTube]
+    [Provide exactly 4 numbered points using 1., 2., 3., 4. on ethical tech use/Chromebooks/Canva/YouTube]
 
     SECTION: OPENING LESSON CONTENT
     [Hook activity and transition plan]
 
     SECTION: DIFFERENTIATION STRATEGIES (GREEN)
-    - HA (Higher Achiever): [1 challenging activity]
+    1. HA (Higher Achiever): [1 challenging activity]
 
     SECTION: DIFFERENTIATION STRATEGIES (YELLOW)
-    - MA (Medium Achiever): [1 core activity]
+    1. MA (Medium Achiever): [1 core activity]
 
     SECTION: DIFFERENTIATION STRATEGIES (RED)
-    - LA (Lower Achiever): [1 scaffolded activity]
+    1. LA (Lower Achiever): [1 scaffolded activity]
 
     SECTION: BLENDED LEARNING Activity ONE (15 MINS)
-    - Activity 1: [Descriptions]
-    - Teacher Preparation: [Step-by-step before lesson]
-    - Objectives: [3 points]
-    - Student Tasks: [Step-by-step details]
+    1. Activity 1: [Descriptions]
+    2. Teacher Preparation: [Step-by-step before lesson]
+    3. Objectives: [3 numbered points]
+    4. Student Tasks: [Step-by-step details]
 
     SECTION: BLENDED LEARNING Activity TWO (15 MINS)
-    - Activity 2: [Descriptions]
-    - Teacher Preparation: [Step-by-step before lesson]
-    - Objectives: [3 points]
-    - Student Tasks: [Step-by-step details]
+    1. Activity 2: [Descriptions]
+    2. Teacher Preparation: [Step-by-step before lesson]
+    3. Objectives: [3 numbered points]
+    4. Student Tasks: [Step-by-step details]
 
     SECTION: PEDATI FLOW GRID
-    [Generate content for the 4 pedagogical blocks exactly using the layout below. Keep descriptions concise and practical.]
     BLOCK_START: P: PREPARATION (LEARN)
     LECTURER: [Actionable steps aligned with the topic]
     STUDENTS: [Actionable tasks/chromebook work aligned with the topic]
@@ -113,40 +123,123 @@ def generate_advanced_plan(topic, syllabus, extra_context):
     except Exception as e:
         return f"System Error: {str(e)}"
 
-# --- 3. WORD EXPORT LOGIC (WITH NEW GRID PARSER) ---
+def add_page_number(run):
+    """Helper function to inject dynamic Word field codes for top-centered page numbers."""
+    fldChar1 = OxmlElement('w:fldChar')
+    fldChar1.set(qn('w:fldCharType'), 'begin')
+    instrText = OxmlElement('w:instrText')
+    instrText.set(qn('xml:space'), 'preserve')
+    instrText.text = "PAGE"
+    fldChar2 = OxmlElement('w:fldChar')
+    fldChar2.set(qn('w:fldCharType'), 'separate')
+    fldChar3 = OxmlElement('w:fldChar')
+    fldChar3.set(qn('w:fldCharType'), 'end')
+    
+    run._r.append(fldChar1)
+    run._r.append(instrText)
+    run._r.append(fldChar2)
+    run._r.append(fldChar3)
+
+# --- 3. WORD EXPORT LOGIC ---
 def create_word_export(topic, syllabus, text):
     doc = Document()
-    doc.add_heading(f'PTES Lesson Plan: {topic}', 0)
+    
+    # Rule 1: Page configuration (LETTER size, 0.5-inch margins)
+    for section in doc.sections:
+        section.page_width = Inches(8.5)
+        section.page_height = Inches(11.0)
+        section.top_margin = Inches(0.5)
+        section.bottom_margin = Inches(0.5)
+        section.left_margin = Inches(0.5)
+        section.right_margin = Inches(0.5)
+        
+        # Rule 7: Top-centered page numbering
+        header = section.header
+        header_p = header.paragraphs[0]
+        header_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        header_run = header_p.add_run()
+        header_run.font.name = 'Arial'
+        header_run.font.size = Pt(10)
+        add_page_number(header_run)
 
-    # Admin Header Table
+    # Rule 2 & 8: Main Heading (CAPITAL LETTERS, Font Size 14)
+    main_title = f'PTES UNIVERSAL & PEDATI LESSON PLAN: {topic}'.upper()
+    title_p = doc.add_paragraph()
+    title_run = title_p.add_run(main_title)
+    title_run.font.size = Pt(14)
+    title_run.bold = True
+    
+    # Rule 3 & 8: Standard document styling configuration (Arial 12, SINGLE spacing)
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Arial'
+    font.size = Pt(12)
+    style.paragraph_format.line_spacing = 1.0
+    style.paragraph_format.space_after = Pt(0)
+    style.paragraph_format.space_before = Pt(0)
+
+    # Admin Table Block
     admin_table = doc.add_table(rows=3, cols=4)
     admin_table.style = 'Table Grid'
     labels = [["Week No:", "Date:"], ["Class Size:", "Day:"], ["Venue:", "Duration:"]]
     for r in range(3):
         admin_table.cell(r, 0).text = labels[r][0]
         admin_table.cell(r, 2).text = labels[r][1]
-    doc.add_paragraph()
+        
+    for row in admin_table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.line_spacing = 1.0
+                for run in p.runs:
+                    run.font.size = Pt(12)
+    doc.add_paragraph().paragraph_format.line_spacing = 1.0
 
-    # Split output into major structural sections
+    # Structural Content Extraction Block
     sections = text.split('SECTION:')
  
     for section in sections:
         if not section.strip(): continue
         lines = section.strip().split('\n')
-        title = lines[0].strip().replace("**", "")
+        
+        # Rule 2 & 4: Upper-case transformation for titles and asterisk removal
+        title = lines[0].strip().replace("**", "").upper()
         body_content = "\n".join(lines[1:]).strip()
+        
+        doc_heading = doc.add_paragraph()
+        doc_heading.paragraph_format.line_spacing = 1.0
+        h_run = doc_heading.add_run(title)
+        h_run.bold = True
+        h_run.font.size = Pt(14)  # Rule 8: Title size 14
 
-        # Check if this section contains the specialized visual tables
-        if "PEDATI FLOW GRID" in title.upper():
-            doc.add_heading("P.E.D.A.T.I Flow Breakdown", level=1)
+        # Rule 6: Keywords center-aligned table grid processing
+        if "KEYWORDS" in title:
+            raw_keywords_text = " ".join([l.strip() for l in lines[1:] if l.strip()])
+            keyword_items = [kw.strip() for kw in raw_keywords_text.split(",") if kw.strip()]
             
-            # Parse individual blocks
+            kw_table = doc.add_table(rows=2, cols=3)
+            kw_table.style = 'Table Grid'
+            
+            idx = 0
+            for r in range(2):
+                for c in range(3):
+                    if idx < len(keyword_items):
+                        cell = kw_table.cell(r, c)
+                        cell.text = keyword_items[idx]
+                        p = cell.paragraphs[0]
+                        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        p.paragraph_format.line_spacing = 1.0
+                        if p.runs:
+                            p.runs[0].font.size = Pt(12)
+                        idx += 1
+            doc.add_paragraph().paragraph_format.line_spacing = 1.0
+            
+        elif "PEDATI FLOW GRID" in title:
             blocks = body_content.split("BLOCK_START:")
             for block in blocks:
                 if not block.strip(): continue
                 block_data = block.split("BLOCK_END")[0].strip().split('\n')
                 
-                heading_title = block_data[0].strip().replace("**", "")
+                heading_title = block_data[0].strip().replace("**", "").upper() # Rule 2: Upper-case flow titles
                 lecturer_text = ""
                 students_text = ""
                 
@@ -156,52 +249,73 @@ def create_word_export(topic, syllabus, text):
                     elif line.upper().startswith("STUDENTS:"):
                         students_text = line.split(":", 1)[1].strip().replace("**", "")
                 
-                # Render Table Heading
                 p = doc.add_paragraph()
-                p.paragraph_format.space_before = Pt(12)
+                p.paragraph_format.line_spacing = 1.0
+                p.paragraph_format.space_before = Pt(6)
                 run = p.add_run(heading_title)
                 run.bold = True
                 run.font.size = Pt(12)
                 
-                # Draw the customized layout table
                 table = doc.add_table(rows=2, cols=2)
                 table.style = 'Table Grid'
                 
-                # Setup Column Widths
                 for row in table.rows:
-                    row.cells[0].width = Inches(3.25)
-                    row.cells[1].width = Inches(3.25)
+                    row.cells[0].width = Inches(3.75)
+                    row.cells[1].width = Inches(3.75)
                 
-                # Header Row
                 hdr_cells = table.rows[0].cells
                 hdr_cells[0].text = "Lecturer"
                 hdr_cells[1].text = "Students"
-                hdr_cells[0].paragraphs[0].runs[0].font.italic = True
-                hdr_cells[0].paragraphs[0].runs[0].font.bold = True
-                hdr_cells[1].paragraphs[0].runs[0].font.italic = True
-                hdr_cells[1].paragraphs[0].runs[0].font.bold = True
                 
-                # Data Row
                 data_cells = table.rows[1].cells
                 data_cells[0].text = lecturer_text
                 data_cells[1].text = students_text
+                
+                # Apply precise font and row formatting rule definitions (Arial 12, Single spacing)
+                for row in table.rows:
+                    for cell in row.cells:
+                        for paragraph in cell.paragraphs:
+                            paragraph.paragraph_format.line_spacing = 1.0
+                            for run in paragraph.runs:
+                                run.font.size = Pt(12)
+                doc.add_paragraph().paragraph_format.line_spacing = 1.0
         else:
-            # Standard single box rendering engine with automatic asterisk cleaning
-            content = body_content.replace("**", "") 
-            doc.add_heading(title.title(), level=1)
             table = doc.add_table(rows=1, cols=1)
             table.style = 'Table Grid'
+            
+            content = body_content.replace("**", "")
             table.cell(0, 0).text = content
-            doc.add_paragraph()
+            
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        paragraph.paragraph_format.line_spacing = 1.0
+                        for run in paragraph.runs:
+                            run.font.size = Pt(12)  # Rule 8: Text content font size 12
+            doc.add_paragraph().paragraph_format.line_spacing = 1.0
      
-    # HOD Approval Table Block
+    # HOD Authorization Component
     doc.add_page_break()
-    doc.add_heading("HOD Approval & Remarks", level=1)
+    
+    hod_heading = doc.add_paragraph()
+    hod_heading.paragraph_format.line_spacing = 1.0
+    hod_run = hod_heading.add_run("HOD APPROVAL & REMARKS")
+    hod_run.bold = True
+    hod_run.font.size = Pt(14)
+    
     hod_table = doc.add_table(rows=2, cols=2)
     hod_table.style = 'Table Grid'
     hod_table.cell(0, 0).text = "Remarks:"
     hod_table.rows[1].height = Pt(50)
-    hod_table.cell(1, 0).text = "Date:"; hod_table.cell(1, 1).text = "Signature:"
+    hod_table.cell(1, 0).text = "Date:"
+    hod_table.cell(1, 1).text = "Signature:"
+    
+    for row in hod_table.rows:
+        for cell in row.cells:
+            p = cell.paragraphs[0]
+            p.paragraph_format.line_spacing = 1.0
+            if p.runs:
+                p.runs[0].font.size = Pt(12)
 
     bio = BytesIO()
     doc.save(bio)
@@ -223,7 +337,7 @@ if st.button("🚀 GENERATE COMPLETE LESSON PLAN"):
     if u_topic and u_syllabus:
         with st.spinner("AI is integrating all criteria into your plan..."):
             result = generate_advanced_plan(u_topic, u_syllabus, u_extra)
-            st.session_state['adv_plan_out'] = result
+            st.session_state['adv_plan_out'] = result.replace("**", "")
     else:
         st.warning("Please fill in the Topic and Syllabus.")
 
