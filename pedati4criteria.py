@@ -346,7 +346,7 @@ if 'adv_plan_out' in st.session_state:
     st.subheader("AI Draft Preview")
     st.text_area("Content", st.session_state['adv_plan_out'], height=400)
     doc_file = create_word_export(u_topic, u_syllabus, st.session_state['adv_plan_out'])
-    st.download_button("📥 Download to Word version (.docx)", doc_file, f"Universal_LP_{u_topic}.docx")
+    st.download_button("📥 Download to Word version (.docx)", doc_file, f"Merged_LP_{u_topic}.docx")
 
 st.markdown("---")
 st.caption("Lesson planner 4.0 | Developer: Hjh Nurul Haziqah Hj Nordin | © 2026 PTES Innovation")
